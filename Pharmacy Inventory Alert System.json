@@ -1,0 +1,163 @@
+{
+  "name": "Pharmacy Inventory Alert System",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const medicines = $input.all();\n\nif (medicines.length === 0) {\n  return [];\n}\n\nconst today = new Date().toLocaleString();\n\nlet lowStock = [];\nlet expiring = [];\n\nfor (const item of medicines) {\n\n    if(item.json.status === \"LOW_STOCK\"){\n        lowStock.push(item.json);\n    }\n\n    if(item.json.status === \"EXPIRING_SOON\"){\n        expiring.push(item.json);\n    }\n\n}\n\nlet html = `\n<h2>🏥 Pharmacy Daily Report</h2>\n\n<p><b>Date:</b> ${today}</p>\n`;\n\nif(lowStock.length){\n\nhtml += `\n<h3 style=\"color:red;\">Low Stock Medicines</h3>\n\n<table border=\"1\" cellpadding=\"6\">\n\n<tr>\n\n<th>Name</th>\n\n<th>Current</th>\n\n<th>Minimum</th>\n\n<th>Supplier</th>\n\n</tr>\n`;\n\nfor(const medicine of lowStock){\n\nhtml += `\n<tr>\n\n<td>${medicine.name}</td>\n\n<td>${medicine.quantity}</td>\n\n<td>${medicine.minimum_quantity}</td>\n\n<td>${medicine.supplier}</td>\n\n</tr>\n`;\n\n}\n\nhtml += \"</table>\";\n\n}\n\nif(expiring.length){\n\nhtml += \"<br><h3 style='color:orange;'>Expiring Soon</h3>\";\n\nhtml += `\n<table border=\"1\" cellpadding=\"6\">\n\n<tr>\n\n<th>Name</th>\n\n<th>Expiry Date</th>\n\n</tr>\n`;\n\nfor(const medicine of expiring){\n\nhtml += `\n<tr>\n\n<td>${medicine.name}</td>\n\n<td>${medicine.expiry_date}</td>\n\n</tr>\n`;\n\n}\n\nhtml += \"</table>\";\n\n}\n\nreturn [\n\n{\n\njson:{\n\nmessage:html,\n\ncount:medicines.length\n\n}\n\n}\n\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "bf55b83d-4c60-4af6-a885-eb7f1a0099f2",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "fromEmail": "iimezo.zidan@gmail.com",
+        "toEmail": "iimezo.zidan@gmail.com",
+        "subject": "={{ \"🚨 Pharmacy Report (\" + $json.count + \" Alerts)\" }}",
+        "html": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        0
+      ],
+      "id": "01f555a5-e715-4ec4-b16c-418e3d3957ac",
+      "name": "Send email",
+      "webhookId": "2853c276-b9fc-4c7f-9766-473c08ba9385",
+      "credentials": {
+        "smtp": {
+          "id": "7pi46DxFclgsYGGs",
+          "name": "SMTP account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fbf6d5d8-da7b-4ce5-bbdf-2669a3f363fb",
+      "name": "Daily Check"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *,\nCASE\n    WHEN quantity <= minimum_quantity THEN 'LOW_STOCK'\n    WHEN expiry_date <= CURRENT_DATE + INTERVAL '30 days' THEN 'EXPIRING_SOON'\nEND AS status\nFROM medicines\nWHERE quantity <= minimum_quantity\n   OR expiry_date <= CURRENT_DATE + INTERVAL '30 days';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        220,
+        0
+      ],
+      "id": "a3ad4691-c02d-4018-88b5-20c88847d208",
+      "name": "Get Medicines",
+      "credentials": {
+        "postgres": {
+          "id": "Do4xzjyqT4XS6i3S",
+          "name": "Postgres account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO alerts(alert_type)\nVALUES ('EMAIL_SENT');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        920,
+        0
+      ],
+      "id": "e07444b6-92b2-4d55-9023-ff13de1162df",
+      "name": "Save Alert Log",
+      "credentials": {
+        "postgres": {
+          "id": "Do4xzjyqT4XS6i3S",
+          "name": "Postgres account 3"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Check": {
+      "main": [
+        [
+          {
+            "node": "Get Medicines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Medicines": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Save Alert Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c629e866-4f28-48ba-a84a-76171968cd90",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0d597bc4579aba1bf0928fff3ab18156d8247baa406ed8ad554e19f84e0a86ed"
+  },
+  "id": "PHDGkXyjz0FaexKz",
+  "tags": []
+}
